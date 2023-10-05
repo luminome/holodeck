@@ -1,0 +1,191 @@
+:root {
+  font-family: monospace, monospace;
+
+  color-scheme: light dark;
+  color: rgba(255, 255, 255, 1.0);
+  background-color: #242424;
+
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  -webkit-text-size-adjust: 100%;
+}
+
+/* a {
+  font-weight: 500;
+  color: #646cff;
+  text-decoration: inherit;
+}
+a:hover {
+  color: #535bf2;
+} */
+
+body {
+  margin: 0;
+  padding: 0;
+  /* margin: 0;
+  display: flex;
+  place-items: center;
+  min-width: 320px;
+  min-height: 100vh; */
+}
+
+h1 {
+  font-size: 3.2em;
+  line-height: 1.1;
+}
+
+#app {
+
+  /* max-width: 1280px;
+  margin: 0 auto;
+  padding: 2rem;
+  text-align: center; */
+}
+
+.icon {
+  will-change: filter;
+  transition: filter 300ms;
+}
+
+.icon:hover {
+  filter: brightness(2.0) drop-shadow(0 0 1em);
+}
+
+.card {
+  padding: 2em;
+}
+
+button {
+  border-radius: 8px;
+  border: 1px solid transparent;
+  padding: 0.6em 1.2em;
+  font-size: 1em;
+  font-weight: 500;
+  font-family: inherit;
+  background-color: #1a1a1a;
+  cursor: pointer;
+  transition: border-color 0.25s;
+}
+button:hover {
+  border-color: #646cff;
+}
+button:focus,
+button:focus-visible {
+  outline: 4px auto -webkit-focus-ring-color;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    color: #213547;
+    background-color: #ffffff;
+  }
+  /* a:hover {
+    color: #747bff;
+  } */
+  button {
+    background-color: #f9f9f9;
+  }
+}
+
+
+/* 
+#interact{
+  position: absolute;
+  top:0;
+  left:0;
+  width:100vw;
+  height:100vh;
+  z-index: 0;
+} */
+
+#environment{
+  position: absolute;
+  width:100vw;
+  height:100vh;
+  /* border: 1px blue solid; */
+  /* box-sizing: border-box; */
+  /* pointer-events: none; */
+}
+
+/* #user-canon{
+  pointer-events: none;
+} */
+
+#model g{
+  cursor:pointer;
+}
+
+#model g :hover{
+  opacity:1.0;
+}
+
+#model g *:hover {
+  opacity:1.0;
+  fill:white;
+  filter: brightness(6.0) drop-shadow(0 0 64px);
+}
+
+#refresh-button{
+  width:24px;
+  height:24px;
+  position:absolute;
+  top:8px;
+  right:32px;
+}
+
+#refresh-button svg{
+  transform:scale(50%);
+}
+
+#output{
+  border: 1px gray dotted;
+  
+  position:absolute;
+  font-size: 10pt;
+  line-height: 12pt;
+  top:10px;
+  left:10px;
+}
+#output div{
+  padding:5px;
+}
+
+#output div:not(:last-child){
+  border-bottom: 1px gray dotted;
+}
+
+#autonomous_info_region{
+  /* position: absolute; */
+  /* pointer-events: none; */
+  width: 100vw;
+  height: 100vh;
+}
+
+
+#superlative{
+  cursor:pointer;
+  opacity: 0.0;
+  transition: opacity 0.25s ease-in-out;
+}
+
+#superlative:hover{
+  opacity: 0.75 !important;
+  transition: opacity 0.25s ease-in-out;
+}
+
+
+
+#info-marker{
+  visibility: hidden;
+  opacity: 0.0;
+  transition: opacity 0.25s ease-in-out;
+}
+
+
+#info-marker.info-fadein {
+  visibility: visible;
+  opacity: 1.0;
+  transition: opacity 0.25s ease-in-out;
+}
