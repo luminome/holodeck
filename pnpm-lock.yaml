@@ -8,11 +8,17 @@ dependencies:
   gl-matrix:
     specifier: ^3.4.3
     version: 3.4.3
-  ts-modules-vite:
-    specifier: github:luminome/ts-modules-vite
-    version: github.com/luminome/ts-modules-vite/abfecc0f31ca19f7416fd365f8ea94e5d18f33f7
+  svg-path-reverse:
+    specifier: ^1.7.0
+    version: 1.7.0
 
 devDependencies:
+  bezier-js:
+    specifier: ^6.1.4
+    version: 6.1.4
+  ts-modules-vite:
+    specifier: github:luminome/ts-modules-vite
+    version: github.com/luminome/ts-modules-vite/8eb857675ce0975743e805d2ea40d2abe27a9365
   vite:
     specifier: ^4.4.5
     version: 4.4.9
@@ -217,6 +223,10 @@ packages:
     dev: true
     optional: true
 
+  /bezier-js@6.1.4:
+    resolution: {integrity: sha512-PA0FW9ZpcHbojUCMu28z9Vg/fNkwTj5YhusSAjHHDfHDGLxJ6YUKrAN2vk1fP2MMOxVw4Oko16FMlRGVBGqLKg==}
+    dev: true
+
   /esbuild@0.18.20:
     resolution: {integrity: sha512-ceqxoedUrcayh7Y7ZX6NdbbDzGROiyVBgC4PriJThBKSVPWnnFHZAkfI1lJT8QFkOwH4qOS2SJkS4wvpGl8BpA==}
     engines: {node: '>=12'}
@@ -257,7 +267,6 @@ packages:
 
   /gl-matrix@3.4.3:
     resolution: {integrity: sha512-wcCp8vu8FT22BnvKVPjXa/ICBWRq/zjFfdofZy1WSpQZpphblv12/bOQLBC1rMM7SGOFS9ltVmKOHil5+Ml7gA==}
-    dev: false
 
   /nanoid@3.3.6:
     resolution: {integrity: sha512-BGcqMMJuToF7i1rt+2PWSNVnWIkGCU78jBG3RxO/bZlnZPK2Cmi2QaffxGO/2RvWi9sL+FAiRiXMgsyxQ1DIDA==}
@@ -290,6 +299,10 @@ packages:
     resolution: {integrity: sha512-R0XvVJ9WusLiqTCEiGCmICCMplcCkIwwR11mOSD9CR5u+IXYdiseeEuXCVAjS54zqwkLcPNnmU4OeJ6tUrWhDw==}
     engines: {node: '>=0.10.0'}
     dev: true
+
+  /svg-path-reverse@1.7.0:
+    resolution: {integrity: sha512-oD1EJem0/mJEJJ2QVVkl+JLP+W7fumQskI0R4OiBJWk5eSoAlJFugb60DAP/14nbvXJfBl+OEunb6PcnV0QgJw==}
+    dev: false
 
   /vite@4.4.9:
     resolution: {integrity: sha512-2mbUn2LlUmNASWwSCNSJ/EG2HuSRTnVNaydp6vMCm5VIqJsjMfbIWtbH2kDuwUVW5mMUKKZvGPX/rqeqVvv1XA==}
@@ -326,10 +339,10 @@ packages:
       fsevents: 2.3.3
     dev: true
 
-  github.com/luminome/ts-modules-vite/abfecc0f31ca19f7416fd365f8ea94e5d18f33f7:
-    resolution: {tarball: https://codeload.github.com/luminome/ts-modules-vite/tar.gz/abfecc0f31ca19f7416fd365f8ea94e5d18f33f7}
+  github.com/luminome/ts-modules-vite/8eb857675ce0975743e805d2ea40d2abe27a9365:
+    resolution: {tarball: https://codeload.github.com/luminome/ts-modules-vite/tar.gz/8eb857675ce0975743e805d2ea40d2abe27a9365}
     name: ts-modules-vite
-    version: 0.0.0
+    version: 0.0.1
     dependencies:
       gl-matrix: 3.4.3
-    dev: false
+    dev: true

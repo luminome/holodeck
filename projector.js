@@ -20,6 +20,7 @@ const projector = () => {
         Y_pos: 0
     }
 
+    const dec_p = 6; //decimal places
     const z_order  = new Map;
     const viewMatrix = new Float32Array(16);
     const projMatrix = new Float32Array(16);
@@ -31,7 +32,7 @@ const projector = () => {
     const camera_util = vec3.create();
     const camera_position = vec3.create();
     const camera_base_position = vec3.create();
-    const cam_pos_world = vec3.create();
+    const camera_world_position = vec3.create();
     const user_world_pos = vec3.create();
     const user_world_pos_d = vec3.create();
 
@@ -39,6 +40,10 @@ const projector = () => {
     const u = vec3.create();
     const uw = vec3.create();
     const fin = vec3.create();
+
+    const m_pre = vec4.create();
+    const model_view = vec3.create();
+    const model_view_proj = vec3.create();
 
     const xRotationMatrix = new Float32Array(16);
     const yRotationMatrix = new Float32Array(16);
@@ -144,7 +149,7 @@ const projector = () => {
 
 
         //⭐ apply world position to camera world position;
-        vec3.sub(cam_pos_world, camera_position, world_position);
+        vec3.sub(camera_world_position, camera_position, world_position);
 
         //⭐ set scale;
         const z_offset = (e.Z_dep)/(P.zoom_threshold);
@@ -157,7 +162,7 @@ const projector = () => {
         if(v){
             // https://stackoverflow.com/questions/5666222/3d-line-plane-intersection
             // vec3.sub(v, v, world_position);
-            vec3.sub(ray, cam_pos_world, v);
+            vec3.sub(ray, camera_world_position, v);
             // vec3.transformMat4(uv, camera_base_position, cameraMatrix);
             // const cam_in = vec3.fromValues(cameraMatrix[8],cameraMatrix[9],cameraMatrix[10]);
             // vec3.sub(uv3, world_position, cam_pos_world);
@@ -238,7 +243,12 @@ const projector = () => {
         mat4.lookAt(viewMatrix, camera_position, [0,0,0], cam_up);
         mat4.translate(modelMatrix, identityMatrix, world_position);
 
-        P.stat = {'world':world_position, 'grid':grid_position, 'user':user_world_pos};
+        P.z_rotation = e.X_rot;
+
+        // P.stat = {
+        //     'world':world_position,
+        //     'grid':grid_position,
+        //     'user':user_world_pos};
         // depth_sort();
         // P.depth_stack = depth_report();
     }
@@ -271,7 +281,7 @@ const projector = () => {
     const project = (element) => {
         // need good way to assert that element is an instance of point from main.js.
         const full = element.constructor.name === 'Object';
-
+        // console.log(full);
         if(full){
             if(element.name === 'user') vec3.copy(uv3, user_world_pos);
             if(element.name === 'grid') vec3.add(uv3, element.loc, grid_position);
@@ -279,31 +289,54 @@ const projector = () => {
             if(element.name === 'scaler') return vec3.normalize(uv3, camera_position);
             if(element.name === 'pos') vec3.negate(uv3, world_position);
         }else{
-            vec3.set(uv3, element[0], element[1], element[2]);
+            vec3.copy(uv3, element);
         }
 
-        let m_v;
         const D = camera_base_position[2];
-        const r_v = vec4.fromValues(uv3[0], uv3[1], uv3[2], 1.0);
-        vec4.transformMat4(uv, r_v, modelMatrix);
+        vec4.set(m_pre, uv3[0], uv3[1], uv3[2], 1.0);
+
+        vec4.transformMat4(uv, m_pre, modelMatrix);
         vec4.transformMat4(uv, uv, viewMatrix);
-        if(full) m_v = vec3.fromValues(uv[0],uv[1],uv[2]);
+        vec3.copy(model_view, uv);
+
+        // if(full) m_v = vec3.fromValues(uv[0],uv[1],uv[2]);
         vec4.transformMat4(uv, uv, projMatrix);
         uv[0] /= uv[3];
         uv[1] /= uv[3];
         var pixelX = (uv[0] *  0.5 + 0.5) * P.view.width;
         var pixelY = (uv[1] * -0.5 + 0.5) * P.view.height;
 
+        //should return (px:[x,y], z:Z, d:D)
+
         if(full){
             vec2.set(element.px_loc, pixelX, pixelY);
-            element.Z = m_v[2];
-            element.Siz = ((general_D*0.4) / -m_v[2]);
+            element.Z = model_view[2];
+            element.Siz = ((general_D*0.4) / -model_view[2]);
             //📝 set depth: it's dangerous to try and solve this for 2-d objects.
-            element.D = Math.round(vec3.squaredDistance(uv3, cam_pos_world));
+            element.D = Math.round(vec3.squaredDistance(uv3, camera_world_position));
         }else{
-            return [Number(pixelX.toFixed(2)), Number(pixelY.toFixed(2))];
+            return [pixelX, pixelY];//[Number(pixelX.toFixed(2)), Number(pixelY.toFixed(2))];
         }
 
+    }
+
+    const project_sm = (v3) => {
+        vec4.set(uv, v3[0], -v3[1], v3[2], 1.0);
+        vec4.transformMat4(uv, uv, modelMatrix);
+        vec4.transformMat4(uv, uv, viewMatrix);
+        const S = uv[2];
+        vec4.transformMat4(uv, uv, projMatrix);
+        const Z = uv[2];
+        uv[0] /= Math.abs(uv[3]);
+        uv[1] /= Math.abs(uv[3]);
+        const [px,py] = [((uv[0] * 0.5 + 0.5) * P.view.width), (uv[1] * -0.5 + 0.5) * P.view.height];
+        const D = Math.round(vec3.squaredDistance(v3, camera_world_position));
+        return {
+            p: [px,py], //[Number(px.toFixed(dec_p)), Number(py.toFixed(dec_p))], 
+            z: Number(Z.toFixed(dec_p)),
+            s: Number(S.toFixed(dec_p)),
+            d: D
+        };
     }
 
     const init = (point_ct, grid_point_ct, spread, cam_z, width, height, messaging_callback = null) => {
@@ -327,7 +360,7 @@ const projector = () => {
         point_count = point_ct;
         point_spread = spread;
 
-        general_D = cam_z;
+        // general_D = cam_z;
         z_depth_buffer = new Uint16Array(point_count*2);
         z_depth_stack = new Uint16Array(point_count*2);
         z_order_indexes = new Uint16Array(point_count*2);
@@ -357,6 +390,7 @@ const projector = () => {
 
         P.destination_pos = vec3.create();
 
+        
         // initialize_depth_sort();
         set_projection();
     }
@@ -370,11 +404,21 @@ const projector = () => {
         delta: undefined,
         view: undefined,
         depth_stack: undefined,
-        stat: {},
+        message: undefined,
+
+        'z_rotation': e.X_rot,
+
+        'world_position': world_position,
+        'grid_position': grid_position,
+        'user_world_pos': user_world_pos,
+        'camera_position': camera_position,
+        'camera_world_position': camera_world_position,
+
         init: init,
         project: project,
+        project_sm: project_sm,
         update: update_matrices,
-        message: undefined,
+        
     }
 
     return P;

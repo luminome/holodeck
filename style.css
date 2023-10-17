@@ -1,9 +1,9 @@
 :root {
   font-family: monospace, monospace;
 
-  color-scheme: light dark;
-  color: rgba(255, 255, 255, 1.0);
-  background-color: #242424;
+  color-scheme: light;
+  /* color: rgba(255, 255, 255, 1.0); */
+  /* background-color: #242424; */
 
   font-synthesis: none;
   text-rendering: optimizeLegibility;
@@ -117,17 +117,17 @@ button:focus-visible {
   cursor:pointer;
 }
 
-#model g :hover{
+/* #model g :hover{
   opacity:1.0;
-}
-
-#model g *:hover {
-  opacity:1.0;
-  fill:white;
-  filter: brightness(6.0) drop-shadow(0 0 64px);
-}
+} */
 
 #refresh-button{
+  position:absolute;
+  top:32px;
+  right:32px;
+}
+
+/* #refresh-button{
   width:24px;
   height:24px;
   position:absolute;
@@ -137,7 +137,7 @@ button:focus-visible {
 
 #refresh-button svg{
   transform:scale(50%);
-}
+} */
 
 #output{
   border: 1px gray dotted;
@@ -157,8 +157,8 @@ button:focus-visible {
 }
 
 #autonomous_info_region{
-  /* position: absolute; */
-  /* pointer-events: none; */
+  position: absolute;
+  pointer-events: none;
   width: 100vw;
   height: 100vh;
 }
@@ -171,7 +171,7 @@ button:focus-visible {
 }
 
 #superlative:hover{
-  opacity: 0.75 !important;
+  opacity: 0.0 !important;
   transition: opacity 0.25s ease-in-out;
 }
 

@@ -4,15 +4,17 @@
   "version": "0.0.0",
   "type": "module",
   "scripts": {
-    "dev": "vite",
+    "dev": "vite --host",
     "build": "vite build",
     "preview": "vite preview"
   },
   "devDependencies": {
+    "bezier-js": "^6.1.4",
+    "ts-modules-vite": "github:luminome/ts-modules-vite",
     "vite": "^4.4.5"
   },
   "dependencies": {
     "gl-matrix": "^3.4.3",
-    "ts-modules-vite": "github:luminome/ts-modules-vite"
+    "svg-path-reverse": "^1.7.0"
   }
 }

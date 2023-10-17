@@ -3,19 +3,62 @@ import { event } from "ts-modules-vite/build/modules/events-massive/event-handle
 import { vec3 } from "gl-matrix";
 import { projector, _set_buffer, _get_buffer } from "./projector.js";
 import { mover } from "./mover.js"
-import {g_point, g_square_path} from "./model-objects.js";
+import { g_point, g_gnarly } from "./model-objects.js";
+import { createSVGElement, load_svg_icons, resize_svg_paths, setAttrs, sortDomByDistance } from "./utils.js"
 
 const width = window.visualViewport ? window.visualViewport.width : window.innerWidth;
 const height = window.visualViewport ? window.visualViewport.height : window.innerHeight;
+
+const dark_colors = window.matchMedia("(prefers-color-scheme: light)").matches;
+console.log('dark_colors', dark_colors);
+
+
+let STOPPED_EXEC = false;
+let DEPTH_ENABLE = true;
+let LOOP_STYLE = true;
+
+const toggled = {
+  Space: STOPPED_EXEC,
+  Tab: DEPTH_ENABLE,
+  Digit1: LOOP_STYLE,
+}
+
+let toggle_check = Object.keys(toggled);
 
 // 📌 make app body-html:
 document.querySelector('#app').innerHTML = `
 
 <svg id="environment" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
+  <defs>
+    <filter id='f2' x="-50%" y="-50%" width="200%" height="200%">
+      <feDropShadow dx="0" dy="0" stdDeviation="24" flood-color="blue" flood-opacity="0.75"/>
+    </filter>
+
+    <filter id="fwe2">
+      <feGaussianBlur stdDeviation="11 0" />
+    </filter>
+
+    <filter id="fs2" x="0" y="0" width="300%" height="300%">
+      <feOffset result="offOut" in="SourceGraphic" dx="0" dy="0" />
+      <feColorMatrix result="matrixOut" in="offOut" type="matrix"
+      values="0.9 0 0 0 0 0 0.9 0 0 0 0 0 0.9 0 0 0 0 0 1 0" />
+      <feGaussianBlur result="blurOut" in="offOut" stdDeviation="30" />
+      <feBlend in="SourceGraphic" in2="blurOut" mode="normal" />
+    </filter>
+  </defs>
+
+  <clipPath id="myClip">
+    <!--
+      Everything outside the circle will be
+      clipped and therefore invisible.
+    -->
+    <rect x="0" y="0" width="${width}" height="${height}"/>
+  </clipPath>
+
   <g id="zones">
     <circle id="superlative" cx="0" cy="0" r="22" fill="gray" style="opacity:0.75;"/>
   <g>
-  <g id="model">
+  <g id="model" clip-path="url(#myClip)">
 
   <g>
 </svg>
@@ -29,43 +72,54 @@ document.querySelector('#app').innerHTML = `
   <a href="/">
     <svg width="48" height="48" class="icon" xmlns="http://www.w3.org/2000/svg" xmlns:xlink="http://www.w3.org/1999/xlink">
       <circle id="svg_origin" cx="24" cy="24" r="22" fill="gray" style="opacity:0.75;"/>
-      <g transform="translate(8,8) scale(0.064)">
-        <g>
-          <path d="M122.941,374.241c-20.1-18.1-34.6-39.8-44.1-63.1c-25.2-61.8-13.4-135.3,35.8-186l45.4,45.4c2.5,2.5,7,0.7,7.6-3
-            l24.8-162.3c0.4-2.7-1.9-5-4.6-4.6l-162.4,24.8c-3.7,0.6-5.5,5.1-3,7.6l45.5,45.5c-75.1,76.8-87.9,192-38.6,282
-            c14.8,27.1,35.3,51.9,61.4,72.7c44.4,35.3,99,52.2,153.2,51.1l10.2-66.7C207.441,421.641,159.441,407.241,122.941,374.241z"/>
-          <path d="M424.941,414.341c75.1-76.8,87.9-192,38.6-282c-14.8-27.1-35.3-51.9-61.4-72.7c-44.4-35.3-99-52.2-153.2-51.1l-10.2,66.7
-            c46.6-4,94.7,10.4,131.2,43.4c20.1,18.1,34.6,39.8,44.1,63.1c25.2,61.8,13.4,135.3-35.8,186l-45.4-45.4c-2.5-2.5-7-0.7-7.6,3
-            l-24.8,162.3c-0.4,2.7,1.9,5,4.6,4.6l162.4-24.8c3.7-0.6,5.4-5.1,3-7.6L424.941,414.341z"/>
-        </g>
+      <g id="refresh-icon">
+
       </g>
     </svg>
   </a>
 </div>
 `
 
+// 📌 setup graphics:
+const icon_loader = document.createElement("div");
+
+
 const environment = document.querySelector('#environment');
 const info_svg = document.querySelector('#autonomous_info_region');
 const superlative = document.querySelector('#superlative');
 const model = document.querySelector('#model');
 const output = document.querySelector('#output');
+const zones = document.querySelector('#zones');
 
 const uv = vec3.create();
+const marker_position = vec3.create();
 const proj = projector();
-let STOPPED_EXEC = false;
-let DEPTH_ENABLE = true;
-let LOOP_STYLE = true;
 
-const toggled = {
-  Space: false,
-  Tab: true,
-  Digit1: true,
-}
+// const helper = document.createElementNS("http://www.w3.org/2000/svg", "g");
+// const helper_rect = document.createElementNS("http://www.w3.org/2000/svg", "rect");
+// setAttrs(helper_rect,{id:'helper_rect',stroke:'red', fill:'none'});
+// helper.appendChild(helper_rect);
 
-let toggle_check = Object.keys(toggled);
+const overlay = createSVGElement("g", {id:`overlay`});
+const overlay_mini = createSVGElement("g", {id:`overlay-mini`});
+// setAttrs(overlay,{transform:`translate(200,100) scale(1.0)`});
+// const li1 = createSVGElement('line', {x1: -10, x2: 10, y1: 0, y2: 0, stroke:'white'});
+// const li2 = createSVGElement('line', {x1: 0, x2: 0, y1: -10, y2: 10, stroke:'white'});
+// overlay.appendChild(li1);
+// overlay.appendChild(li2);
+
+
+
+
+
+
+model.appendChild(overlay_mini);
+model.appendChild(overlay);
+// model.appendChild(helper);
 
 // 📌 setupevent callback "cb_radio":
 const cb_radio = (event, args) => {
+  // console.log(event);
 
   if(Array.isArray(args)){
     args.forEach((v) => (toggle_check.includes(v)) ? toggled[v] = !toggled[v] : void(0));
@@ -106,37 +160,39 @@ const cb_radio = (event, args) => {
   if(event.target.id && event.target.id === 'environment') info.stash();
 
   !LOOP_STYLE && loop();
+
+  return true;
 }
 
 event(document.body, cb_radio, {'type':'keyboard', 'toggle_keys':toggle_check, 'interval':50});
 const _ET = event(environment, cb_radio, {'type':'screen', 'interval':0, 'context_disable':true});
+
+
+
 
 const log = {
   y_deg:0,
   proj_msg:'',
   reordered: 0,
   target: undefined,
-  frame: 0
+  frame: 0,
+  pz:0
 }
 
 // 📌 set static vars here:
 const points = 4;
-const spread = 20;
-const objects_array = [];
-const default_cam_distance = 50.0;
-const grid_point_size = 4.0;
+const spread = 50;
+const objects_map = new Map();
+const default_cam_distance = 16.0;
+const grid_point_size = 10.0;
 const grid_point_text = false;
 let index = 0;
 proj.evt = _ET;
 let proto_scale_vertical = 1.0;
 let target = undefined;
 
-export const setAttrs = (e, a) => Object.entries(a).forEach(([k,v]) => e.setAttribute(k,v));
 
 const projector_messaging = (msg) => log.proj_msg = msg;
-
-// utility to manually set the dom order of elements.
-const insertAfter = (newNode, existingNode) => existingNode.parentNode.insertBefore(newNode, existingNode.nextSibling);
 
 
 const pretty_ass_info_marker = () => {
@@ -146,7 +202,6 @@ const pretty_ass_info_marker = () => {
     setAttrs(g,{
       'id':'info-marker',
       'class':'info-fadein',
-      'style':'pointer-events:all;'
     });
     const t = document.createElementNS("http://www.w3.org/2000/svg", "text");
     setAttrs(t,{
@@ -163,7 +218,7 @@ const pretty_ass_info_marker = () => {
       'stroke': 'white',
       'stroke-width': 4,
       'fill':'none',
-      style:'opacity:0.5;'
+      'fill-opacity':0.5
     });
 
     I.text = t;
@@ -185,22 +240,22 @@ const pretty_ass_info_marker = () => {
     setAttrs(superlative,{
       cx:position[0],
       cy:position[1],
-      r:(I.Siz*rel_size)-2, //4px outline line
+      r:(I.siz*rel_size)-2, //4px outline line
       // 'class':'info-fadein',
     });
 
     setAttrs(I.svg_item,{
-      r:I.Siz*rel_size
+      r:I.siz*rel_size
     });
 
     setAttrs(I.text,{
-      y:(I.Siz*rel_size)//;//+I.fontSiz
+      y:(I.siz*rel_size)//;//+I.fontSiz
     });
 
     if(ref_string){
       // text added, not null (updating position only).
       I.element.style.opacity = '1.0';
-      superlative.style.opacity = '0.25';
+      superlative.style.opacity = '0.0';
 
       if(Array.isArray(ref_string)){
         I.text.innerHTML = ref_string.map((rs) => `<tspan x="0" dy="12">${rs}</tspan>`).join('');
@@ -222,7 +277,7 @@ const pretty_ass_info_marker = () => {
   }
 
   const I = {
-    Siz:60,
+    siz:60,
     fontSiz:8,
     element: undefined,
     attach,
@@ -237,15 +292,13 @@ const info = pretty_ass_info_marker();
 info.attach();
 
 
-
-
 const add_point = (name) => {
   const e = g_point(index).init();
   e.name = name;
   e.index = index;
   e.base_siz = 10.0;
   e.base_color = 'white';
-  objects_array.push(e);
+  objects_map.set(index,e);
   model.appendChild(e.svg);
   index++;
   return e;
@@ -257,7 +310,7 @@ for(let x=0;x<points;x++){
     for(let z=0;z<points;z++){
       const e = add_point('grid');
       vec3.set(e.loc, x*spread, -y*spread, z*spread);
-      e.base_color = 'yellow';
+      e.base_color = 'black';
       e.base_siz = grid_point_size;
     }
   }
@@ -266,15 +319,11 @@ for(let x=0;x<points;x++){
 //⭐ SETUP USER.
 const user = add_point('user');
 user.base_color = 'red';
-setAttrs(user.svg,{id:'user-canon'});
+setAttrs(user.svg,{id:'user-canon','fill-opacity':'0.0'});
 
 //⭐ SETUP CENTER.
 const center = add_point('center');
 center.base_color = 'white';
-
-//⭐ SETUP Scale POINT.
-const scaler = add_point('scaler');
-scaler.base_color = 'magenta';
 
 //⭐ SETUP POS POINT.
 const pos = add_point('pos');
@@ -283,80 +332,31 @@ pos.mover = mover();
 setAttrs(pos.svg,{'id':'position'});
 
 // 📌 flag zero:
-objects_array[0].base_color = 'white';
+objects_map.get(0).base_color = 'white';
+// objects_map[0].base_color = 'white';
 
-//⭐ SETUP PLANE.
-const test = g_square_path(index, proj).init();
-test.name = 'plane';
-setAttrs(test.svg,{'id':'plane-base'});
-model.appendChild(test.svg);
-objects_array.push(test);
-index++;
-
-
-
-
-
-//⭐ USING ONLY THE MATH LIBRARY: GL_MATRIX.
-proj.init(index, points ** 3, spread, default_cam_distance, width, height, projector_messaging);
-const order = new Uint16Array(objects_array.length);
+//⭐ SETUP GNAR-CUBE
+// const gnar = g_gnarly(proj, 'the-cube', 'cube', index);
+// if(gnar){
+//   gnar.name = 'the-cube';
+//   gnar.index = index;
+//   setAttrs(gnar.svg,{'id':`the-cube-base`,'data-index':index});
+//   model.appendChild(gnar.svg);
+//   // model.appendChild(gnar.util_path);
+//   objects_map.set(index, gnar);
+//   index++;
+// }
 
 
-const direction_event_handler = (evt) => {
-  if(target){
-    const n = objects_array.find((p) => (p.index === Number(target.dataset.index)));
 
-    if(n.name === 'grid'){
-      vec3.add(uv, n.loc, proj.stat.grid);
-      vec3.negate(uv,uv);
-      vec3.copy(proj.destination_pos, uv);
-      vec3.copy(pos.mover.pos, proj.stat.world);
-      pos.mover.direct(uv);
-    }
-
-    if(n.name === 'plane'){
-      vec3.copy(pos.mover.pos, proj.stat.world);
-      pos.mover.direct([0,0,0]);
-      // vec3.set(proj.destination_pos, 0, 0, 0);
-    }
-  }
-}
-
-// 📌 setup events on svg elemets:
-for(let n of objects_array){
-  const gets_event = (n.name === 'grid' || n.name === 'plane' || n.name === 'pos');
-  if(gets_event){
-    setAttrs(n.svg,{'style':'pointer-events:all;'});
-    n.svg.addEventListener('mouseenter', (evt) => {
-      target = evt.target;
-      log.target = target.id;
-      if(n.name === 'plane'){
-        info.set(proj.stat.world, n.Siz, [target.id, [0,0,0]]);
-      }
-      if(n.name === 'grid'){
-        vec3.add(uv, n.loc, proj.stat.grid);
-        info.set(n.px_loc, n.Siz, [target.id, [uv]]);
-      }
-      if(n.name === 'pos'){
-        const p = [...proj.stat.world].map((v) => v.toFixed(2))
-        info.set(n.px_loc, n.Siz, [target.id, [p]]);
-      }
-    },false);
-    n.svg.addEventListener('mouseup', direction_event_handler, false);
-
-  }else{
-    setAttrs(n.svg,{'style':'pointer-events:none;'});
-  }
-}
-
-superlative.addEventListener('mouseup', direction_event_handler, false);
+let order;
 
 
 //⭐ LOOP! THIS IS ORIGINAL LUMINOME.
 const loop = (frame) => {
   if(!STOPPED_EXEC){
     // fucking incredible.
-    // log.frame = frame;
+    log.frame = frame;
 
     if(pos.mover.is_moving){
       pos.mover.go(frame);
@@ -365,78 +365,75 @@ const loop = (frame) => {
 
     proj.update(); //update matrices.
 
+    // 📌 optical 2d distortion brought to you by camera position Z.
+    vec3.normalize(uv, proj.camera_position);
+    proto_scale_vertical = Math.abs(uv[2]);
+    log.y_deg = proto_scale_vertical.toFixed(2);
 
 
-    for(let n of objects_array){
-      const r = proj.project(n);
-      const existing_style_attrib = n.svg.getAttribute('style');
 
-      if(n.type === 'point'){
-        // 📌 optical 2d distortion brought to you by "scaler" point.
-        if(n.name === 'scaler'){
-          proto_scale_vertical = Math.abs(r[2]);
-          log.y_deg = proto_scale_vertical.toFixed(2);
-        } 
 
-        const s = 1.0;//n.name === 'user' ? proto_scale_vertical : 1.0;
-        
-        if(n.Z > 0) continue;
 
-        if(!isNaN(n.px_loc[0]) && !isNaN(n.px_loc[1]) && n.Siz >= 0){
-          setAttrs(n.svg_item,{
-            'transform': `scale(${s})`,
-            r:(n.Siz*n.base_siz).toFixed(2),
-            fill: n.base_color
-          });
-          if(grid_point_text){
-            setAttrs(n.svg_text,{'transform': `scale(${n.Siz*1.2})`});
-            n.svg_text.innerHTML = n.index+'|'+n.D;
+    // for(let n of objects_map){
+    objects_map.forEach((n,i) =>{
+      switch(n.name) {
+        case 'user':
+          vec3.copy(uv, proj.user_world_pos);
+          break;
+        case 'pos':
+          vec3.negate(uv, proj.world_position);
+          break;
+        case 'grid':
+          vec3.add(uv, n.loc, proj.grid_position);
+          break;
+        default:
+          vec3.copy(uv, n.loc);
+      }
+      
+      const {p, z, s, d} = proj.project_sm(uv);
+
+      if(z > 0){
+        n.siz = (default_cam_distance / -s);
+        n.dist = d;
+        n.Z = z;
+
+        n.name === 'plane' && (log.pz = [z,s]);
+
+        if(!isNaN(p[0]) && !isNaN(p[1]) && n.siz < Infinity && n.siz > -Infinity){
+
+          if(n.type === 'point'){
+            const s = n.name === 'center' ? proto_scale_vertical : 1.0;
+            setAttrs(n.svg_item,{
+              'transform': `scale(1,${s})`,
+              r: n.siz*n.base_siz > 0 ? (n.siz*n.base_siz).toFixed(2) : 0.0,
+              fill: n.base_color
+            });
+
+            if(grid_point_text){
+              setAttrs(n.svg_text,{'transform': `scale(${n.siz*1.2})`});
+              n.svg_text.innerHTML = n.index+'|'+d;
+            };
+            
+            setAttrs(n.svg,{
+              'transform': `translate(${p[0]}, ${p[1]})`,
+            });
+            n.svg.style.opacity = n.siz;
+          }else{
+            n.render(proj);
           }
-          
-          setAttrs(n.svg,{
-            'transform': `translate(${n.px_loc[0].toFixed(2)}, ${n.px_loc[1].toFixed(2)})`,
-            'style':`${existing_style_attrib}opacity:${n.Siz}`
-          });
+
+          n.svg.visibility = 'visible';
+        }else{
+          n.svg.visibility = 'hidden';
         }
-      }else{
-        n.update();
-        setAttrs(n.svg_item,{
-          fill:n.base_color
-        });
       }
-
-    }
-
+    });
 
 
-
-
-
-
-
-    // Now we can sort it. Sort by distance from camera
     let reported = 0;
+
     if(DEPTH_ENABLE){
-      objects_array.sort((a, b) => Number(b.D) - Number(a.D));
-      
-      
-      for(let i = 0; i < objects_array.length; i++) {
-        if(order[i] !== objects_array[i].index){
-          order[i] = objects_array[i].index;
-
-          // the element in question;
-          const q_el = model.querySelector(`g[data-index="${order[i]}"]`);
-
-          const obj = objects_array[order[i]];
-          obj.type === 'point' && setAttrs(obj.svg_item, {fill:'yellowgreen'});
-
-          // the element before it in index-order;
-          const b_el = model.childNodes[i];
-          insertAfter(q_el, b_el);
-          reported++;
-        }
-      }
-      
+      reported = sortDomByDistance(model, objects_map, order);
     }
 
     log.reordered = DEPTH_ENABLE === true ? reported : 'disabled';
@@ -445,20 +442,210 @@ const loop = (frame) => {
     Object.entries(log).forEach(([k,v]) => output.innerHTML += `<div>${k}</br><b>${v}</b></div>`);
     
     if(target){
-      const in_list = objects_array.find((p) => (p.index === Number(target.dataset.index)));
-      if(in_list.name === 'plane'){
-        const c = objects_array.find((p) => (p.name === 'center'));
-        const [x,y] = c.px_loc;
-        info.set([x,y], in_list.Siz);
-      }else{
-        const [x,y] = in_list.px_loc;
-        info.set([x,y], in_list.Siz);
-      }
+      const element = objects_map.get(Number(target.dataset.index));
+      const {p} = proj.project_sm(marker_position);
+      info.set(p, element.siz);
     }
 
   }
-  LOOP_STYLE && window.requestAnimationFrame(loop);
+  LOOP_STYLE && requestAnimationFrame(loop);
 }
 
+// https://stackoverflow.com/questions/19764018/controlling-fps-with-requestanimationframe
 
-LOOP_STYLE && window.requestAnimationFrame(loop);
+
+
+
+
+
+
+
+const setup_and_run = (pk) => {
+  icon_loader.innerHTML = pk;
+
+  // 📌 setup graphics attributes as object:
+  const parts = {
+    '#R':{
+      target: 'g#refresh-icon',
+      data: undefined,
+      scale:48
+    },
+    '#CHZ':{
+      target: undefined,
+      data: undefined,
+      scale:1.0
+    },
+    '#CIR':{
+      target: undefined,
+      data: undefined,
+      scale:1.0
+    },
+    '#PLANE':{
+      target: undefined,
+      data: undefined,
+      scale:1.0
+    },
+  }
+
+  // 📌 instantiate/copy graphics to object:
+  for(let p of Object.keys(parts)){
+    const svg_parts = icon_loader.querySelectorAll(`${p}>*`);
+    parts[p].data = resize_svg_paths(svg_parts);
+    if(parts[p].target){
+      const dest = document.querySelector(parts[p].target);
+      parts[p].data.forEach((pc) => {dest.innerHTML += pc.outerHTML});
+      setAttrs(dest,{transform: `scale(${parts[p].scale})`});
+    }
+  }
+
+
+
+  //⭐ SETUP GNAR model components.
+  const gnar_parts = {
+    cheese:{
+      parts: parts['#CHZ'],
+      transform:{t:-0.5, s:10.0},
+      no_normal: true,
+      has_marker: true,
+      extruded: 2.0,
+      show_extruded_planes: true,
+    },
+    // circle:{
+    //   parts: parts['#CIR'],
+    //   transform:{t:-0.5, s:1.0},
+    //   no_normal: true,
+    //   special:'scale-to-distance'
+    // },
+    // plane:{
+    //   parts: parts['#PLANE'],
+    //   transform:{t:-0.5, s:100.0},
+    // }
+  }
+
+  //⭐ SETUP GNAR
+  for(let p of Object.keys(gnar_parts)){
+    const gnar = g_gnarly(proj, p, gnar_parts[p], index);
+    if(gnar){
+      gnar.name = p;
+      gnar.index = index;
+      setAttrs(gnar.svg,{'id':`${p}-base`,'data-index':index});
+      model.appendChild(gnar.svg);
+      objects_map.set(index, gnar);
+      index++;
+    }
+  }
+
+
+
+  //⭐ USING ONLY THE MATH LIBRARY: GL_MATRIX.
+  proj.init(index, points ** 3, spread, default_cam_distance, width, height, projector_messaging);
+  order = new Uint16Array(objects_map.size);
+
+
+  const direction_event_handler = (evt) => {
+    if(target){
+      const n = objects_map.get(Number(target.dataset.index));//find((p) => (p.index === Number(target.dataset.index)));
+
+      if(n.name === 'grid'){
+        vec3.add(uv, n.loc, proj.grid_position);
+        vec3.copy(marker_position, uv);
+        vec3.negate(uv, uv);
+        vec3.copy(proj.destination_pos, uv);
+        vec3.copy(pos.mover.pos, proj.world_position);
+        pos.mover.direct(uv);
+      }
+
+      if(n.name === 'plane'){
+        vec3.copy(pos.mover.pos, proj.world_position);
+        vec3.copy(marker_position, [0,0,0]);
+        pos.mover.direct([0,0,0]);
+      }
+    }
+  }
+
+  // 📌 setup events on svg elemets:
+  objects_map.forEach((n,i) =>{
+
+    const gets_event = (n.name === 'sugarcube' || n.name === 'grid' || n.name === 'plane' || n.name === 'pos');
+    if(gets_event){
+      // setAttrs(n.svg,{'style':'pointer-events:all;'});
+      n.svg.addEventListener('mouseenter', (evt) => {
+        target = evt.target;
+        log.target = target.id;
+        if(n.name === 'plane'){
+          vec3.copy(marker_position, [0,0,0]);
+          info.set(marker_position, n.siz, [target.id, [0,0,0]]);
+        }
+        if(n.name === 'grid'){
+          vec3.add(uv, n.loc, proj.grid_position);
+          vec3.copy(marker_position, uv);
+          info.set(marker_position, n.siz, [target.id, [uv]]);
+        }
+        if(n.name === 'pos'){
+          vec3.negate(marker_position, proj.world_position);
+          const p = [...proj.world_position].map((v) => v.toFixed(2));
+          info.set(n.loc, n.siz, [target.id, [p]]);
+        }
+
+        if(n.name === 'sugarcube'){
+          console.log(n.stat());
+        }
+
+        n.svg.style.filter = `brightness(2) drop-shadow(${n.base_color} 0px 0px ${n.siz*12}px)`;
+        
+      },false);
+
+      n.svg.addEventListener('mouseleave', (evt) => {
+        n.svg.style.filter = 'none';
+      },false);
+
+      n.svg.addEventListener('mouseup', direction_event_handler, false);
+
+    }else{
+      setAttrs(n.svg,{'style':'pointer-events:none;'});
+    }
+  });
+
+  superlative.addEventListener('mouseup', direction_event_handler, false);
+
+
+
+
+
+  if(LOOP_STYLE){
+    requestAnimationFrame(loop);
+  }else{
+    loop(1);
+    // loop(2);
+  }
+  
+  environment.focus();
+
+  // const m_event = new Event("mouseleave");
+  
+  // // let clickEvent = document.createEvent('MouseEvents');
+  // // clickEvent.initEvent (eventType, true, true);
+  // environment.dispatchEvent(m_event);
+  
+  
+  const mouseenter = new MouseEvent("mouseover", {
+    bubbles: true,
+    cancelable: false
+  });
+  
+  environment.dispatchEvent(mouseenter);
+  
+
+
+}
+
+load_svg_icons(icon_loader).then(pk => setup_and_run(pk));
+
+
+
+
+
+
+
+
+
